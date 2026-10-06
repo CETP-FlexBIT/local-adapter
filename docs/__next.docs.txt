@@ -1,0 +1,5 @@
+1:"$Sreact.fragment"
+2:I[1981,["327","static/chunks/327-ba4e252e68d83dda.js","364","static/chunks/364-b12e1ca5a876ea33.js","78","static/chunks/78-9a3742f2b2f6f943.js","499","static/chunks/app/docs/layout-5bad701dd7b0df2a.js"],"LayoutBody"]
+3:I[287,[],""]
+4:I[5747,[],""]
+0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"tree":{"type":"root","$ref":{"folder":"","meta":"meta.json"},"$id":"root","name":"FlexBIT Local Adapter","children":[{"$id":"installation.mdx","type":"page","name":"Installation","description":"Install with Docker or run the standalone adapter on Linux.","url":"/docs/installation","$ref":"installation.mdx"},{"$id":"how-it-works.mdx","type":"page","name":"How it works","description":"Map your device, send telemetry, and check delivery to FlexBIT.","url":"/docs/how-it-works","$ref":"how-it-works.mdx"}]},"tabs":[],"sidebar":{},"nav":{"title":"FlexBIT Local Adapter"},"githubUrl":"https://github.com/CETP-FlexBIT/local-adapter","children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"YgmzXfHXXwwzq_K_0kT9j"}

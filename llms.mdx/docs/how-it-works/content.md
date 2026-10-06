@@ -1,0 +1,87 @@
+# How it works (/docs/how-it-works)
+
+
+
+
+
+The adapter receives JSON over HTTP or MQTT, saves it locally, maps its fields, and sends it to FlexBIT. If delivery fails, it keeps the event and retries.
+
+Use the BESS example below to try the full flow. The same steps apply to other asset types.
+
+## 1. Connect your device to a FlexBIT asset [#1-connect-your-device-to-a-flexbit-asset]
+
+Open **Mappings**. Under **Device mappings**, select **Add device mapping**, enter your local device ID, and select the destination FlexBIT asset.
+
+For this example, use `demo-bess` as the local device ID and select a BESS asset from your site. This tells the adapter which FlexBIT asset should receive the device's measurements.
+
+<img src="withSiteBasePath('/images/mappings.png')" alt="Mappings page with field mappings and local device IDs linked to FlexBIT assets" width="2962" height="1910" loading="lazy" />
+
+The demo mappings shown here are included with the installation. Replace the example device mappings with your own asset selections.
+
+## 2. Map the payload fields [#2-map-the-payload-fields]
+
+Under **Field mappings**, edit `demo-bess` using the pencil button. For your own payload, select **Add mapping** instead.
+
+Choose the asset type and set **Asset ID path** to the field containing the local device ID. In the example, `device.id` identifies the device, and `measurements.soc` supplies the FlexBIT field `bess_storage_soc`.
+
+Enter a payload path for each measurement you want to send, then save. Mapping changes apply without restarting the adapter.
+
+<img src="withSiteBasePath('/images/field-mapping.png')" alt="Edit mapping dialog with device.id as the asset ID path and measurements.soc mapped to bess_storage_soc" width="2962" height="1910" loading="lazy" />
+
+## 3. Send telemetry [#3-send-telemetry]
+
+### Over HTTP [#over-http]
+
+Run this from the installation directory to send the BESS payload shown in the screenshots.
+
+With Docker:
+
+```sh
+./scripts/test-telemetry.sh rest bess
+```
+
+Without Docker, use a second terminal while the adapter is running:
+
+```sh
+cd ~/flexbit-local-adapter
+./test-telemetry.sh rest bess
+```
+
+For your own integration, POST a JSON object to `/v1/ingest` with `Content-Type: application/json` and `X-Mapping-Id` set to your mapping ID. For example:
+
+```sh
+curl --fail-with-body http://127.0.0.1:4000/v1/ingest \
+  -H 'Content-Type: application/json' \
+  -H 'X-Mapping-Id: demo-bess' \
+  -d '{"device":{"id":"demo-bess"},"measurements":{"soc":67.5}}'
+```
+
+An `accepted` response means the adapter saved the event locally. Check **Events** for delivery to FlexBIT.
+
+### Over MQTT [#over-mqtt]
+
+Open **MQTT** and select **Add connection**. Enter your broker URL and client ID, add credentials if needed, and add a subscription pairing your telemetry topic with a mapping ID.
+
+For the bundled Docker broker, use `mqtt://mosquitto:1883`. For standalone mode, use the address of your external broker. A BESS subscription can use topic `devices/bess/telemetry` and mapping ID `demo-bess`.
+
+<img src="withSiteBasePath('/images/mqtt.png')" alt="MQTT page with Add connection and a section for per-asset command targets" width="2962" height="1910" loading="lazy" />
+
+If you enabled MQTT during Docker installation, the local connection and demo subscriptions are already configured. With Mosquitto clients installed on the host, send a test message with:
+
+```sh
+./scripts/test-telemetry.sh mqtt bess
+```
+
+For commands to a device, add a **Command target** linking its FlexBIT asset ID to an MQTT connection and topic. Check outgoing attempts on **Commands**. The current adapter accepts commands through `/internal/commands`; it does not subscribe to platform commands automatically.
+
+## 4. Check the result [#4-check-the-result]
+
+Open **Events** and expand your event. The left side shows the incoming JSON; the right side shows the mapped FlexBIT payload and delivery state.
+
+<img src="withSiteBasePath('/images/events.png')" alt="Expanded delivered BESS event showing incoming measurements beside the mapped FlexBIT payload" width="2962" height="2102" loading="lazy" />
+
+* **Pending** means the event is waiting for mapping. Check its error, mapping ID, and payload paths if it stays pending.
+* **Mapped** means the payload is ready for delivery.
+* **Delivered** means the adapter sent it to FlexBIT.
+
+If delivery does not complete, check the error shown on the event and verify your FlexBIT credentials and network connection.

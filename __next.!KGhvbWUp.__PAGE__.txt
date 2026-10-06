@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[742,["742","static/chunks/742-7b7d0ee3f1494fb6.js","813","static/chunks/app/(home)/page-25e41b51e13b77e8.js"],""]
+3:I[8150,[],"OutletBoundary"]
+4:"$Sreact.suspense"
+0:{"rsc":["$","$1","c",{"children":[["$","main",null,{"className":"mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center px-6 py-20","children":[["$","p",null,{"className":"mb-4 text-sm font-medium text-fd-muted-foreground","children":"Edge telemetry adapter"}],["$","h1",null,{"className":"max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl","children":"FlexBIT Local Adapter"}],["$","p",null,{"className":"mt-6 max-w-2xl text-lg leading-8 text-fd-muted-foreground","children":"Install the adapter, map your device fields, and send telemetry to FlexBIT."}],["$","div",null,{"className":"mt-10 flex flex-wrap gap-3","children":[["$","$L2",null,{"href":"/docs/installation","className":"rounded-lg bg-fd-primary px-5 py-3 text-sm font-medium text-fd-primary-foreground","children":"Installation"}],["$","$L2",null,{"href":"/docs/how-it-works","className":"rounded-lg border px-5 py-3 text-sm font-medium","children":"How it works"}]]}]]}],null,["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"YgmzXfHXXwwzq_K_0kT9j"}
+5:null

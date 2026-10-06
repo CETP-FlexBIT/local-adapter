@@ -1,0 +1,4 @@
+# FlexBIT Local Adapter
+
+- [Installation](/docs/installation): Install with Docker or run the standalone adapter on Linux.
+- [How it works](/docs/how-it-works): Map your device, send telemetry, and check delivery to FlexBIT.
