@@ -1,0 +1,78 @@
+---
+title: Installation
+description: Install with Docker or run the standalone adapter on Linux.
+---
+
+## Get your FlexBIT credentials
+
+Open the connection page for your environment:
+
+- [Testing](https://app.testing.cetp-flexbit.eu/connect-local-adapter)
+- [Production](https://app.cetp-flexbit.eu/connect-local-adapter)
+
+Select your site, create an API key, and copy the **Site ID**, **API Key ID**, and **API Key Secret**. The secret is shown only once. The installer asks for these as Site ID, API ID, and API secret.
+
+## Run the installer
+
+Run these commands in a terminal:
+
+```sh
+mkdir -p ~/flexbit-local-adapter
+cd ~/flexbit-local-adapter
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh | sh
+```
+
+The installer asks whether to use Docker. Choose yes for Docker or no for standalone Linux, or select a mode directly with the commands below.
+
+## With Docker
+
+Install Docker with the Docker Compose plugin and start Docker. To select Docker directly, run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh | sh -s -- --with-docker
+```
+
+Follow the prompts. Choose your FlexBIT environment, enter your credentials, and choose whether to start now. Optional services are:
+
+- **MQTT** adds a local Mosquitto broker for device telemetry.
+- **History** adds QuestDB to store telemetry history.
+- **Monitoring** adds Prometheus and Grafana.
+
+The installer downloads the image and starts the selected services. To check the adapter or stop it later, run these from the installation directory:
+
+```sh
+docker compose ps
+docker compose logs -f adapter
+docker compose stop
+```
+
+## Without Docker
+
+Use 64-bit Linux on AMD64 or ARM64, with glibc 2.28 or newer, libstdc++ 6.0.25 or newer, `curl`, `unzip`, and `sha256sum`. Raspberry Pi needs a 64-bit OS. Node is included in the package.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh | sh -s -- --without-docker
+```
+
+Choose your environment and enter your credentials. Choose **yes** at the system service prompt to run in the background and start on boot. This requires systemd and root or sudo access. You can select it directly with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh | sh -s -- --without-docker --with-service
+```
+
+Manage the service with:
+
+```sh
+sudo systemctl status flexbit-local-adapter.service
+sudo systemctl restart flexbit-local-adapter.service
+sudo systemctl stop flexbit-local-adapter.service
+sudo journalctl -u flexbit-local-adapter.service -f
+```
+
+Choose **no** at the service prompt to run in the terminal. Press Ctrl-C to stop; run `./start-adapter.sh` from the installation directory to start again. Standalone mode can connect to an external MQTT broker, but does not install the optional Docker services.
+
+## Open the dashboard
+
+Open [http://127.0.0.1:4000](http://127.0.0.1:4000) on the machine running the adapter. The installer prints the dashboard URL and any optional service links.
+
+Continue with [How it works](/docs/how-it-works) to map your device and send your first event.
