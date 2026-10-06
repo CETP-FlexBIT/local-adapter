@@ -1,0 +1,6 @@
+node_modules/
+docs/.next/
+docs/out/
+docs/.source/
+.env*
+.DS_Store
