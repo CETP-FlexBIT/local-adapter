@@ -156,6 +156,10 @@ The installed config/mappings directory includes demo-bess, demo-ev-charger, and
 
 Use the Mappings page to adjust source paths and target FlexBIT fields. The supplied samples match the supplied demo mappings. A device with another payload shape needs its own mapping. UI saves reload the affected configuration; restart after manual YAML edits.
 
+For a field that should always have the same value, change its source from Payload path to Fixed value and enter the value. The adapter adds it to every mapped event. Plain text is a string; JSON values such as 100, false, and null keep their types. Quote numeric or boolean text to keep it as a string. An empty fixed value adds an empty string. In YAML, set constant to the value and has_constant: true on that field instead of source.
+
+For MQTT devices that each publish to their own topic, set Asset ID source to MQTT topic in the field mapping. Add a device mapping whose local identifier is the exact incoming topic and select its remote platform device. Payloads then need no device ID. The YAML setting is asset_id_source: mqtt_topic instead of asset_id_path, and topic assignments go in the existing device_ids table. Wildcard subscriptions still require a device mapping for each full incoming topic. Keep Asset ID path for REST or payload-based device identification.
+
 Protect .env, configuration files containing broker passwords, and SQLite backups. HTTP intake currently does not authenticate requests. The helper's bearer header does not enforce access control, so choose the HTTP bind address and host access policy deliberately.
 
 ## MQTT configuration for both modes
@@ -269,6 +273,35 @@ docker compose --profile mqtt --profile history \
 For standalone, stop the foreground process or systemd service, create the same archive from the installation directory, then restart. Store backups securely. The existing backup.sh, restore.sh, and reset.sh helpers target the former Docker named-volume layout and do not manage the installed bind-mounted data directories.
 
 To restore, stop the services, preserve a copy of the current files, and extract the backup into the installation directory. Restart and repeat the health and telemetry checks. Reinstallation preserves .env, operator configuration, and SQLite data; it refreshes the application, runtime, and managed scripts. Stop standalone before reinstalling.
+
+### Manage the adapter from a terminal
+
+Installation and update add the executable flexbit-adapter command and link it from /usr/local/bin, using sudo when needed. For a user-local command directory, pass --bin-dir "$HOME/.local/bin" to the installer and add that directory to PATH. The directory is remembered for updates.
+
+```sh
+flexbit-adapter help
+flexbit-adapter start
+flexbit-adapter stop
+flexbit-adapter restart
+flexbit-adapter status
+flexbit-adapter uninstall
+```
+
+The command works from any directory. It manages the existing systemd service or Docker adapter. Uninstall removes the service or adapter container while keeping credentials, configuration, data, and the management command. Docker optional services are left running. For a foreground installation, start runs the launcher and stop requires Ctrl-C; install with --with-service for background start/stop control.
+
+### Update an existing installation
+
+Download the current installer so the command also works for older installations that have no updater. Run from the installation directory:
+
+```sh
+cd ~/flexbit-local-adapter
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh -o update-installer.sh
+sh ./update-installer.sh --update
+```
+
+The default target is the latest published release. Add --version X.Y.Z to select a release, or --install-dir /path/to/installation to update another directory. Mode is detected from the existing installation. Credentials, configuration, and data are preserved without new prompts. Docker changes only FLEXBIT_ADAPTER_IMAGE in .env and recreates only the adapter, leaving optional services running.
+
+Standalone updates download and verify the selected Linux package and bundled Node runtime before replacing the application and managed launch/test scripts. Existing systemd services stop and restart automatically; their unit and service user remain unchanged. Stop a foreground adapter with Ctrl-C before updating; the new version then starts in the foreground. Add --no-start to leave standalone stopped after updating. For Docker, --no-start saves the new image setting while keeping the current container running; the recap prints the command to recreate it later.
 
 ### Diagnose a failed test
 

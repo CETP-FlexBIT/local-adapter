@@ -1,0 +1,83 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage: flexbit-adapter <command>
+
+Commands:
+  start       Start the adapter service, or run a foreground installation
+  stop        Stop the adapter service
+  restart     Restart the adapter service
+  status      Show the adapter service status
+  uninstall   Stop and remove the service or adapter container
+  help        Show this help (also --help or -h)
+
+Configuration and data are kept when uninstalling.
+Systemd changes use sudo when needed. Docker commands use your Docker access.
+Foreground installations stop with Ctrl-C and have no service to uninstall.
+EOF
+}
+
+case "${1:-help}" in
+  help|-h|--help) usage; exit 0 ;;
+  start|stop|restart|status|uninstall) ACTION="$1" ;;
+  *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;
+esac
+[ "$#" -eq 1 ] || { echo "Expected one command" >&2; usage >&2; exit 2; }
+
+COMMAND_PATH="$0"
+while [ -L "$COMMAND_PATH" ]; do
+  COMMAND_DIR="$(CDPATH= cd -- "$(dirname -- "$COMMAND_PATH")" && pwd)"
+  LINK="$(readlink "$COMMAND_PATH")"
+  case "$LINK" in
+    /*) COMMAND_PATH="$LINK" ;;
+    *) COMMAND_PATH="$COMMAND_DIR/$LINK" ;;
+  esac
+done
+INSTALL_DIR="$(CDPATH= cd -- "$(dirname -- "$COMMAND_PATH")" && pwd)"
+[ -f "$INSTALL_DIR/.env" ] || { echo "No adapter installation found at $INSTALL_DIR" >&2; exit 1; }
+cd "$INSTALL_DIR"
+
+as_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  else
+    command -v sudo >/dev/null || { echo "This command requires root or sudo" >&2; exit 1; }
+    sudo "$@"
+  fi
+}
+
+if [ -f compose.yaml ]; then
+  command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
+  case "$ACTION" in
+    start) docker compose up -d --no-deps adapter ;;
+    stop) docker compose stop adapter ;;
+    restart) docker compose restart adapter ;;
+    status) docker compose ps --all adapter ;;
+    uninstall) docker compose rm --stop --force adapter ;;
+  esac
+elif [ -f flexbit-local-adapter.service ]; then
+  command -v systemctl >/dev/null || { echo "systemd is required" >&2; exit 1; }
+  case "$ACTION" in
+    start|stop|restart) as_root systemctl "$ACTION" flexbit-local-adapter.service ;;
+    status) systemctl status flexbit-local-adapter.service ;;
+    uninstall)
+      as_root systemctl disable --now flexbit-local-adapter.service
+      as_root rm -f /etc/systemd/system/flexbit-local-adapter.service
+      as_root systemctl daemon-reload
+      rm -f flexbit-local-adapter.service
+      ;;
+  esac
+elif [ -f start-adapter.sh ]; then
+  case "$ACTION" in
+    start) exec ./start-adapter.sh ;;
+    uninstall) echo "No system service is installed. Configuration and data were kept."; exit 0 ;;
+    *) echo "This is a foreground installation. Start with 'flexbit-adapter start' and stop with Ctrl-C." >&2; exit 1 ;;
+  esac
+else
+  echo "No adapter service found at $INSTALL_DIR" >&2
+  exit 1
+fi
+
+[ "$ACTION" != uninstall ] || echo "Adapter service removed. Configuration and data were kept."

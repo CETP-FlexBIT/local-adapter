@@ -71,6 +71,39 @@ sudo journalctl -u flexbit-local-adapter.service -f
 
 Choose **no** at the service prompt to run in the terminal. Press Ctrl-C to stop; run `./start-adapter.sh` from the installation directory to start again. Standalone mode can connect to an external MQTT broker, but does not install the optional Docker services.
 
+## Manage the adapter from a terminal
+
+Installation and update add the executable `flexbit-adapter` command. It is linked from `/usr/local/bin` by default, with sudo when needed. Choose a user-local directory with the installer's `--bin-dir "$HOME/.local/bin"` option and add that directory to `PATH`. Updates remember the chosen command directory.
+
+```sh
+flexbit-adapter help
+flexbit-adapter start
+flexbit-adapter stop
+flexbit-adapter restart
+flexbit-adapter status
+flexbit-adapter uninstall
+```
+
+You can run these from any directory. Systemd installations use the existing service. Docker actions affect only the adapter, leaving optional services running. Uninstall removes the service or adapter container and keeps configuration, data, and the management command.
+
+For a foreground installation, `flexbit-adapter start` runs in the terminal and stops with Ctrl-C. Install with `--with-service` for background start/stop control. `flexbit-adapter --help` also shows command help. The executable is included in new release ZIPs; updating older installations adds it too.
+
+## Update an existing installation
+
+Run this from the installation directory to update to the latest published release:
+
+```sh
+cd ~/flexbit-local-adapter
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh -o update-installer.sh
+sh ./update-installer.sh --update
+```
+
+Downloading the current installer first also supports older installations that have no update command. To select a release, add `--version X.Y.Z`. To update a different directory, add `--install-dir /path/to/installation`.
+
+The installer detects Docker or standalone mode and preserves your configuration, credentials, and data. It does not ask for credentials again. Docker updates change the adapter image in `.env` and recreate only the adapter; optional services keep running. Standalone updates verify the downloaded ZIP and bundled Node runtime before replacing application files. A systemd installation stops and restarts its existing service without changing the unit.
+
+For a foreground installation, stop the adapter with Ctrl-C before updating. The new version starts in the foreground when the update finishes. Add `--no-start` to leave a standalone installation stopped after the update. For Docker, `--no-start` saves the new image setting but leaves the running container unchanged; use the recap's start command to recreate it later.
+
 ## Open the dashboard
 
 Open [http://127.0.0.1:4000](http://127.0.0.1:4000) on the machine running the adapter. The installer prints the dashboard URL and any optional service links.

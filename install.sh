@@ -2,7 +2,9 @@
 set -eu
 
 IMAGE="ghcr.io/cetp-flexbit/local-adapter"
-VERSION="1.0.0"
+VERSION="1.0.1"
+VERSION_SET=0
+UPDATE=0
 RELEASE_URL="https://github.com/CETP-FlexBIT/local-adapter/releases/download"
 USE_DOCKER=1
 MODE_SET=0
@@ -14,6 +16,8 @@ TESTING_AGENT_ENDPOINT="app.testing.cetp-flexbit.eu:9092"
 PRODUCTION_AGENT_ENDPOINT="app.cetp-flexbit.eu:9092"
 DEFAULT_ENVIRONMENT="testing"
 INSTALL_DIR="$(pwd)"
+BIN_DIR=""
+CLI_SUDO=""
 WITH_MQTT=0
 WITH_HISTORY=0
 WITH_MONITORING=0
@@ -48,8 +52,10 @@ Options:
   --without-docker        Run only the adapter using the standalone Linux ZIP
   --with-service          Install standalone adapter as a systemd service
   --without-service       Run standalone adapter in the foreground (default)
-  --version VERSION       Release version (default: 1.0.0)
+  --update                Update an existing installation, preserving settings/data
+  --version VERSION       Release version (updates default to latest; installs: $VERSION)
   --install-dir PATH      Installation directory (default: current directory)
+  --bin-dir PATH          Command directory (default: /usr/local/bin; saved for updates)
   --with-mqtt             Enable the MQTT profile
   --with-history          Enable the history profile
   --with-monitoring       Enable the monitoring profile
@@ -65,8 +71,10 @@ while [ "$#" -gt 0 ]; do
     --without-docker) USE_DOCKER=0; MODE_SET=1; shift ;;
     --with-service) WITH_SERVICE=1; SERVICE_SET=1; shift ;;
     --without-service) WITH_SERVICE=0; SERVICE_SET=1; shift ;;
-    --version) [ "$#" -ge 2 ] || { echo "--version requires a value" >&2; exit 2; }; VERSION="$2"; shift 2 ;;
+    --update) UPDATE=1; shift ;;
+    --version) [ "$#" -ge 2 ] || { echo "--version requires a value" >&2; exit 2; }; VERSION="$2"; VERSION_SET=1; shift 2 ;;
     --install-dir) [ "$#" -ge 2 ] || { echo "--install-dir requires a value" >&2; exit 2; }; INSTALL_DIR="$2"; INSTALL_DIR_SET=1; shift 2 ;;
+    --bin-dir) [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "--bin-dir requires a value" >&2; exit 2; }; BIN_DIR="$2"; shift 2 ;;
     --with-mqtt) WITH_MQTT=1; MQTT_SET=1; shift ;;
     --with-history) WITH_HISTORY=1; HISTORY_SET=1; shift ;;
     --with-monitoring) WITH_MONITORING=1; MONITORING_SET=1; shift ;;
@@ -156,6 +164,29 @@ existing_value() {
   sed -n "s/^$1=//p" "$env_file" | tail -1
 }
 
+prepare_management_command() {
+  MANAGEMENT_SOURCE="$1"
+  if [ ! -s "$MANAGEMENT_SOURCE" ]; then
+    command -v curl >/dev/null || { echo "curl is required to download flexbit-adapter for this older release" >&2; exit 1; }
+    TEMP_DIR="${TEMP_DIR:-$(mktemp -d)}"
+    trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
+    MANAGEMENT_SOURCE="$TEMP_DIR/flexbit-adapter"
+    curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/scripts/flexbit-adapter -o "$MANAGEMENT_SOURCE"
+  fi
+  sh -n "$MANAGEMENT_SOURCE"
+}
+
+install_management_command() {
+  if [ "$MANAGEMENT_SOURCE" != "$INSTALL_DIR/flexbit-adapter" ]; then
+    cp "$MANAGEMENT_SOURCE" "$INSTALL_DIR/flexbit-adapter"
+  fi
+  chmod +x "$INSTALL_DIR/flexbit-adapter"
+  if [ "$BIN_DIR" != "$INSTALL_DIR" ]; then
+    $CLI_SUDO ln -sfn "$INSTALL_DIR/flexbit-adapter" "$BIN_DIR/flexbit-adapter"
+  fi
+  printf '%s\n' "$BIN_DIR" > "$INSTALL_DIR/.flexbit-adapter-bin-dir"
+}
+
 require_config_value() {
   key="$1"
   value="$2"
@@ -220,6 +251,11 @@ print_recap() {
     printf '%s%-22s%s %s\n' "$MAGENTA" "Service logs" "$RESET" "${SERVICE_SUDO:+sudo }journalctl -u $SERVICE_NAME -f"
   fi
   printf '%s%-22s%s %s\n' "$MAGENTA" "Environment file" "$RESET" "${YELLOW}${INSTALL_DIR}/.env${RESET}"
+  printf '%s%-22s%s %s\n' "$MAGENTA" "Management command" "$RESET" "$BIN_DIR/flexbit-adapter help"
+  case ":$PATH:" in
+    *":$BIN_DIR:"*) ;;
+    *) printf 'Add %s to PATH to use flexbit-adapter from any directory.\n' "$BIN_DIR" ;;
+  esac
 
   if [ "$START" -eq 1 ]; then
     status="Services started"
@@ -242,8 +278,35 @@ SITE_ID="${FLEXBIT_SITE_ID:-}"
 API_ID="${FLEXBIT_API_ID:-}"
 API_SECRET="${FLEXBIT_API_SECRET:-}"
 
+if [ "$UPDATE" -eq 1 ]; then
+  [ -f "$INSTALL_DIR/.env" ] || { echo "--update requires an existing installation with a .env file" >&2; exit 1; }
+  INSTALL_DIR="$(CDPATH= cd -- "$INSTALL_DIR" && pwd)"
+  if [ -f "$INSTALL_DIR/start-adapter.sh" ] && [ ! -f "$INSTALL_DIR/compose.yaml" ]; then
+    DETECTED_DOCKER=0
+  elif [ -f "$INSTALL_DIR/compose.yaml" ] && [ ! -f "$INSTALL_DIR/start-adapter.sh" ]; then
+    DETECTED_DOCKER=1
+  else
+    echo "Cannot determine installation mode; expected standalone or Docker installation files" >&2
+    exit 1
+  fi
+  if [ "$MODE_SET" -eq 1 ] && [ "$USE_DOCKER" -ne "$DETECTED_DOCKER" ]; then
+    echo "Update mode must match the existing installation" >&2
+    exit 2
+  fi
+  USE_DOCKER="$DETECTED_DOCKER"
+  if [ "$USE_DOCKER" -eq 0 ]; then
+    DETECTED_SERVICE=0
+    [ ! -f "$INSTALL_DIR/$SERVICE_NAME" ] || DETECTED_SERVICE=1
+    if [ "$SERVICE_SET" -eq 1 ] && [ "$WITH_SERVICE" -ne "$DETECTED_SERVICE" ]; then
+      echo "Update service mode must match the existing installation" >&2
+      exit 2
+    fi
+    WITH_SERVICE="$DETECTED_SERVICE"
+  fi
+fi
+
 # /dev/tty keeps prompts working when the installer itself is piped from curl.
-if ( : </dev/tty ) 2>/dev/null; then
+if [ "$UPDATE" -eq 0 ] && ( : </dev/tty ) 2>/dev/null; then
   exec 3</dev/tty
   if [ -z "${NO_COLOR:-}" ]; then
     ESC="$(printf '\033')"
@@ -294,25 +357,26 @@ if ( : </dev/tty ) 2>/dev/null; then
   API_SECRET="$(prompt_required_value "API secret" "$API_SECRET")"
 
   exec 3<&-
-else
+elif [ "$UPDATE" -eq 0 ]; then
   printf '%sNo terminal available; using defaults for options not provided.%s\n' "$YELLOW" "$RESET" >&2
 fi
 
-ENVIRONMENT="$(normalize_environment "${ENVIRONMENT:-$DEFAULT_ENVIRONMENT}")"
-AGENT_ENDPOINT="${FLEXBIT_AGENT_ENDPOINT:-$(agent_endpoint_for_environment "$ENVIRONMENT")}"
-
-[ -n "$SITE_ID" ] || SITE_ID="$(existing_value FLEXBIT_SITE_ID)"
-[ -n "$API_ID" ] || API_ID="$(existing_value FLEXBIT_API_ID)"
-[ -n "$API_SECRET" ] || API_SECRET="$(existing_value FLEXBIT_API_SECRET)"
-require_config_value FLEXBIT_SITE_ID "$SITE_ID"
-require_config_value FLEXBIT_API_ID "$API_ID"
-require_config_value FLEXBIT_API_SECRET "$API_SECRET"
+if [ "$UPDATE" -eq 0 ]; then
+  ENVIRONMENT="$(normalize_environment "${ENVIRONMENT:-$DEFAULT_ENVIRONMENT}")"
+  AGENT_ENDPOINT="${FLEXBIT_AGENT_ENDPOINT:-$(agent_endpoint_for_environment "$ENVIRONMENT")}"
+  [ -n "$SITE_ID" ] || SITE_ID="$(existing_value FLEXBIT_SITE_ID)"
+  [ -n "$API_ID" ] || API_ID="$(existing_value FLEXBIT_API_ID)"
+  [ -n "$API_SECRET" ] || API_SECRET="$(existing_value FLEXBIT_API_SECRET)"
+  require_config_value FLEXBIT_SITE_ID "$SITE_ID"
+  require_config_value FLEXBIT_API_ID "$API_ID"
+  require_config_value FLEXBIT_API_SECRET "$API_SECRET"
+fi
 
 if [ "$USE_DOCKER" -eq 1 ]; then
   [ "$WITH_SERVICE" -eq 0 ] || { echo "--with-service requires --without-docker" >&2; exit 2; }
   command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
   docker compose version >/dev/null 2>&1 || { echo "docker compose is required" >&2; exit 1; }
-  if [ "$(uname -s)" = "Darwin" ] && ! command -v mosquitto_pub >/dev/null 2>&1; then
+  if [ "$UPDATE" -eq 0 ] && [ "$(uname -s)" = "Darwin" ] && ! command -v mosquitto_pub >/dev/null 2>&1; then
     if command -v brew >/dev/null 2>&1; then
       printf '%sInstalling Mosquitto client with Homebrew%s\n' "$MAGENTA" "$RESET"
       brew install mosquitto
@@ -343,6 +407,37 @@ else
   fi
 fi
 
+if [ -z "$BIN_DIR" ] && [ -f "$INSTALL_DIR/.flexbit-adapter-bin-dir" ]; then
+  BIN_DIR="$(cat "$INSTALL_DIR/.flexbit-adapter-bin-dir")"
+fi
+BIN_DIR="${BIN_DIR:-/usr/local/bin}"
+if ! { mkdir -p "$BIN_DIR" 2>/dev/null && [ -w "$BIN_DIR" ]; }; then
+  command -v sudo >/dev/null || { echo "Use --bin-dir with a writable directory, or install with sudo" >&2; exit 1; }
+  CLI_SUDO="sudo"
+  sudo -v
+  sudo mkdir -p "$BIN_DIR"
+fi
+BIN_DIR="$(CDPATH= cd -- "$BIN_DIR" && pwd)"
+
+if [ "$UPDATE" -eq 1 ]; then
+  [ "$WITH_MQTT$WITH_HISTORY$WITH_MONITORING" = "000" ] || {
+    echo "Update preserves existing optional services; profile flags are for installation" >&2
+    exit 2
+  }
+  if [ "$VERSION_SET" -eq 0 ] || [ "$VERSION" = latest ]; then
+    command -v curl >/dev/null || { echo "curl is required to find the latest release" >&2; exit 1; }
+    TEMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
+    curl -fsSL "${RELEASE_URL%/download}/latest/download/install.sh" -o "$TEMP_DIR/install.sh"
+    VERSION="$(awk -F '"' '/^VERSION="/ { print $2; exit }' "$TEMP_DIR/install.sh")"
+  fi
+  printf '%s\n' "$VERSION" | awk 'NR == 1 && /^[0-9]+\.[0-9]+\.[0-9]+$/ { valid = 1 } END { exit !(valid && NR == 1) }' || {
+    echo "Update version must be X.Y.Z" >&2
+    exit 2
+  }
+  printf 'Updating %s to version %s\n' "$INSTALL_DIR" "$VERSION"
+fi
+
 IMAGE_REF="${IMAGE}:${VERSION}"
 mkdir -p "$INSTALL_DIR"
 INSTALL_DIR="$(CDPATH= cd -- "$INSTALL_DIR" && pwd)"
@@ -351,6 +446,14 @@ if [ "$USE_DOCKER" -eq 1 ]; then
 printf '%sPulling %s%s\n' "$MAGENTA" "$IMAGE_REF" "$RESET"
 docker pull "$IMAGE_REF"
 
+TEMP_DIR="${TEMP_DIR:-$(mktemp -d)}"
+trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
+if ! docker run --rm --entrypoint sh "$IMAGE_REF" -c 'cat /opt/flexbit/scripts/flexbit-adapter' > "$TEMP_DIR/flexbit-adapter"; then
+  : > "$TEMP_DIR/flexbit-adapter"
+fi
+prepare_management_command "$TEMP_DIR/flexbit-adapter"
+
+if [ "$UPDATE" -eq 0 ]; then
 # The image contains the small deployment bundle needed by Compose. Preserve
 # operator-owned configuration while refreshing managed operational scripts.
 docker run --rm \
@@ -374,14 +477,15 @@ docker run --rm \
     cp -R -a /opt/flexbit/deploy/. /install/deploy/
     chmod +x /install/scripts/*
   '
+fi
 
 else
-  if [ ! -f "$BUNDLE_DIR/.output/server/index.mjs" ] || [ ! -x "$BUNDLE_DIR/runtime/node" ]; then
+  if [ "$UPDATE" -eq 1 ] || [ ! -f "$BUNDLE_DIR/.output/server/index.mjs" ] || [ ! -x "$BUNDLE_DIR/runtime/node" ]; then
     command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
     command -v unzip >/dev/null || { echo "unzip is required" >&2; exit 1; }
     command -v sha256sum >/dev/null || { echo "sha256sum is required" >&2; exit 1; }
     PACKAGE="local-adapter-${VERSION}-linux-${ARCH}.zip"
-    TEMP_DIR="$(mktemp -d)"
+    TEMP_DIR="${TEMP_DIR:-$(mktemp -d)}"
     trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
     printf 'Downloading %s\n' "$PACKAGE"
     curl -fSL "$RELEASE_URL/v$VERSION/$PACKAGE" -o "$TEMP_DIR/$PACKAGE"
@@ -396,6 +500,13 @@ else
     echo "Cannot run bundled Node 24. Use the matching ZIP on Linux with glibc 2.28+ and libstdc++ installed." >&2
     exit 1
   }
+  for file in .output/server/index.mjs start-adapter.sh test-telemetry.sh; do
+    [ -f "$BUNDLE_DIR/$file" ] || { echo "Package is missing $file" >&2; exit 1; }
+  done
+  prepare_management_command "$BUNDLE_DIR/flexbit-adapter"
+  if [ "$UPDATE" -eq 1 ] && [ "$WITH_SERVICE" -eq 1 ]; then
+    $SERVICE_SUDO systemctl stop "$SERVICE_NAME"
+  fi
   if [ "$BUNDLE_DIR" != "$INSTALL_DIR" ]; then
     rm -rf "$INSTALL_DIR/.output" "$INSTALL_DIR/runtime"
     cp -R "$BUNDLE_DIR/.output" "$BUNDLE_DIR/runtime" "$INSTALL_DIR/"
@@ -404,6 +515,7 @@ else
     [ ! -f "$BUNDLE_DIR/LICENSE" ] || cp "$BUNDLE_DIR/LICENSE" "$INSTALL_DIR/LICENSE"
   fi
   chmod +x "$INSTALL_DIR/start-adapter.sh" "$INSTALL_DIR/test-telemetry.sh" "$INSTALL_DIR/runtime/node"
+  if [ "$UPDATE" -eq 0 ]; then
   mkdir -p "$INSTALL_DIR/config/mappings" "$INSTALL_DIR/data/adapter"
   for file in "$BUNDLE_DIR"/config/mappings/*.yaml "$BUNDLE_DIR"/config/*.yaml; do
     target="$INSTALL_DIR/config/$(basename "$file")"
@@ -411,8 +523,10 @@ else
     [ -f "$target" ] || cp "$file" "$target"
   done
   [ -f "$INSTALL_DIR/config/mqtt.yaml" ] || printf '[]\n' > "$INSTALL_DIR/config/mqtt.yaml"
+  fi
 fi
 
+install_management_command
 cd "$INSTALL_DIR"
 
 localize_storage() {
@@ -439,7 +553,7 @@ prepare_deploy_file() {
   mkdir -p "$(dirname "$path")"
 }
 
-if [ "$USE_DOCKER" -eq 1 ]; then
+if [ "$USE_DOCKER" -eq 1 ] && [ "$UPDATE" -eq 0 ]; then
 localize_storage
 
 if [ ! -f deploy/prometheus/prometheus.yml ]; then
@@ -500,17 +614,12 @@ write_default_mqtt_config() {
 EOF
 }
 
-[ -n "$SITE_ID" ] || SITE_ID="$(get_value FLEXBIT_SITE_ID)"
-[ -n "$API_ID" ] || API_ID="$(get_value FLEXBIT_API_ID)"
-[ -n "$API_SECRET" ] || API_SECRET="$(get_value FLEXBIT_API_SECRET)"
-
-require_config_value FLEXBIT_SITE_ID "$SITE_ID"
-require_config_value FLEXBIT_API_ID "$API_ID"
-require_config_value FLEXBIT_API_SECRET "$API_SECRET"
-
 if [ "$USE_DOCKER" -eq 1 ]; then
   set_value FLEXBIT_ADAPTER_IMAGE "$IMAGE_REF"
-else
+fi
+
+if [ "$UPDATE" -eq 0 ]; then
+if [ "$USE_DOCKER" -eq 0 ]; then
   set_missing HOST 127.0.0.1
   set_missing PORT "${ADAPTER_PORT:-4000}"
   set_value FLEXBIT_DATABASE_PATH data/adapter/adapter.db
@@ -525,6 +634,7 @@ set_value FLEXBIT_SITE_ID "$SITE_ID"
 set_missing FLEXBIT_CLIENT_ID "${FLEXBIT_CLIENT_ID:-flexbit-adapter}"
 set_value FLEXBIT_API_ID "$API_ID"
 set_value FLEXBIT_API_SECRET "$API_SECRET"
+fi
 
 if [ "$WITH_MQTT" -eq 1 ]; then
   if [ ! -f config/mqtt.yaml ]; then
@@ -546,9 +656,11 @@ PROFILES=""
 START_COMMAND="./start-adapter.sh"
 if [ "$USE_DOCKER" -eq 1 ]; then
   START_COMMAND="docker compose$PROFILES up -d"
+  [ "$UPDATE" -eq 0 ] || START_COMMAND="docker compose up -d --no-deps adapter"
   docker compose config --quiet
   [ "$START" -eq 0 ] || sh -c "$START_COMMAND"
 elif [ "$WITH_SERVICE" -eq 1 ]; then
+  if [ "$UPDATE" -eq 0 ]; then
   # WorkingDirectory is a literal path, while ExecStart uses quoted arguments.
   # Escape specifiers in both and preserve literal dollars in ExecStart.
   case "$INSTALL_DIR" in
@@ -578,6 +690,7 @@ EOF
   $SERVICE_SUDO install -m 644 "$SERVICE_NAME" "/etc/systemd/system/$SERVICE_NAME"
   $SERVICE_SUDO systemctl daemon-reload
   $SERVICE_SUDO systemctl enable "$SERVICE_NAME"
+  fi
   START_COMMAND="${SERVICE_SUDO:+sudo }systemctl start $SERVICE_NAME"
   [ "$START" -eq 0 ] || $SERVICE_SUDO systemctl restart "$SERVICE_NAME"
 fi

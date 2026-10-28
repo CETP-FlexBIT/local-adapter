@@ -34,7 +34,7 @@ cd "$HOME/flexbit-local-adapter"
 ./start-adapter.sh
 ```
 
-You can also download `local-adapter-1.0.0-linux-arm64.zip` or `local-adapter-1.0.0-linux-amd64.zip` from [GitHub Releases](https://github.com/CETP-FlexBIT/local-adapter/releases/tag/v1.0.0), extract it, and run its `install.sh --without-docker`. Downloaded packages are verified against the release's `SHA256SUMS`. The ZIP includes `.output`, Node, default mappings, the installer, `start-adapter.sh`, and `test-telemetry.sh`; no dependency installation or build is needed on the host. The telemetry helper is included in packages built from this revision onward.
+You can also download `local-adapter-1.0.1-linux-arm64.zip` or `local-adapter-1.0.1-linux-amd64.zip` from [GitHub Releases](https://github.com/CETP-FlexBIT/local-adapter/releases/tag/v1.0.1), extract it, and run its `install.sh --without-docker`. Downloaded packages are verified against the release's `SHA256SUMS`. The ZIP includes `.output`, Node, default mappings, the installer, `start-adapter.sh`, `test-telemetry.sh`, and `flexbit-adapter`; no dependency installation or build is needed on the host.
 
 Use `--with-docker` or `--without-docker` to select the mode without a prompt, and `--version X.Y.Z` to select a release when downloading. Without a terminal, Docker remains the default.
 
@@ -55,6 +55,23 @@ Settings saved in the UI are stored in SQLite and override corresponding `.env` 
 The publisher client ID defaults to `flexbit-adapter`. Export `FLEXBIT_CLIENT_ID` before running the installer to override it.
 
 The installer writes `.env` with mode `0600`. Keep that file private.
+
+## Manage the adapter from a terminal
+
+Downloads include a `flexbit-adapter` executable command. Installation and update copy it into the installation directory and link it from `/usr/local/bin`, using sudo when that directory requires it. Use `--bin-dir "$HOME/.local/bin"` with the installer for a user-local command directory; add that directory to `PATH` if needed. The chosen directory is remembered for updates.
+
+```sh
+flexbit-adapter help
+flexbit-adapter start
+flexbit-adapter stop
+flexbit-adapter restart
+flexbit-adapter status
+flexbit-adapter uninstall
+```
+
+The command works from any directory. Systemd installations use their existing `flexbit-local-adapter.service` unit. Docker actions target only the adapter; optional services keep running. Uninstall disables and removes the systemd service, or removes the adapter container, while keeping credentials, configuration, data, and the management command.
+
+For a standalone foreground installation, `flexbit-adapter start` runs the existing launcher. Stop it with Ctrl-C. Choose `--with-service` during installation for background start/stop control. `-h` and `--help` also display command help.
 
 ## Start and inspect
 
@@ -131,18 +148,34 @@ Docker installations contain:
 
 Runtime data uses bind-mounted directories under `data/`, not Docker named volumes. The `config/` directory is also mounted into the adapter, and changes made in the operator UI are persisted there. The installer creates the data directories with mode `0777` so the containers can write to them; restrict access at the host or filesystem layer as appropriate for the deployment.
 
-Standalone installations contain `.env`, `.output/`, `runtime/`, `config/`, `start-adapter.sh`, `test-telemetry.sh`, and `data/adapter/`. Reinstalling preserves `.env`, configuration, and SQLite data while replacing the application, bundled runtime, and telemetry helper. Stop the adapter before replacing a running installation. Keep Docker and standalone installations in separate directories.
+Standalone installations contain `.env`, `.output/`, `runtime/`, `config/`, `start-adapter.sh`, `test-telemetry.sh`, `flexbit-adapter`, and `data/adapter/`. Reinstalling preserves `.env`, configuration, and SQLite data while replacing the application, bundled runtime, and managed commands. Stop the adapter before replacing a running installation. Keep Docker and standalone installations in separate directories.
+
+## Update an existing installation
+
+From the installation directory, download the current installer and run its update mode. This also works when the installed version predates the updater:
+
+```sh
+cd ~/flexbit-local-adapter
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh -o update-installer.sh
+sh ./update-installer.sh --update
+```
+
+Updates use the latest published release by default. To choose a specific release, add `--version X.Y.Z`. Use `--install-dir /path/to/installation` when running from another directory. The updater detects Docker or standalone mode and does not ask for credentials again. It preserves `.env`, `config/`, `deploy/`, and `data/`, including settings saved through the UI. Docker updates change only `FLEXBIT_ADAPTER_IMAGE` in `.env`.
+
+Docker updates pull the selected image and recreate only the adapter, leaving optional services running. Standalone updates always download the selected Linux ZIP, verify its checksum and bundled Node runtime, then replace the application, runtime, launcher, and telemetry helper. A systemd installation stops and restarts its existing service without replacing the unit. Stop a foreground adapter with Ctrl-C before updating; it starts again in the foreground when the update finishes.
+
+Add `--no-start` to leave a standalone service stopped after replacing its files, or to update Docker's configured image without recreating the running container. The recap prints the command to start the updated adapter. Keep using `--update` for future upgrades, so an old bundled application is never reused.
 
 ## Build and publish releases
 
-The `Release adapter` GitHub Action runs manually from the private repository. Select **Run workflow** and enter a version such as `1.0.0` without the `v` prefix. All authored workflows run manually in the private repository. Public Pages serves the generated `gh-pages` branch; no workflow files are exported to the public repository. It tests both Linux ZIPs, pushes `ghcr.io/cetp-flexbit/local-adapter:X.Y.Z` for `linux/amd64` and `linux/arm64`, then attaches the ZIPs, `SHA256SUMS`, and versioned installer to the GitHub release. Builds and tests run in the private `nextmultiservice/local-adapter` repository. Documentation and installer changes are maintained there and exported to this public repository. Releases and the GHCR package remain public at the existing URLs. Maintainers configure cross-repository publishing credentials in the private repository; set the GHCR package visibility to public for unauthenticated installer pulls.
+The `Release adapter` GitHub Action runs manually from the private repository. Select **Run workflow** and enter a version such as `1.0.1` without the `v` prefix. All authored workflows run manually in the private repository. Public Pages serves the generated `gh-pages` branch; no workflow files are exported to the public repository. It tests both Linux ZIPs, pushes `ghcr.io/cetp-flexbit/local-adapter:X.Y.Z` for `linux/amd64` and `linux/arm64`, then attaches the ZIPs, `SHA256SUMS`, and versioned installer to the GitHub release. Builds and tests run in the private `nextmultiservice/local-adapter` repository. Documentation and installer changes are maintained there and exported to this public repository. Releases and the GHCR package remain public at the existing URLs. Maintainers configure cross-repository publishing credentials in the private repository; set the GHCR package visibility to public for unauthenticated installer pulls.
 
 With access to the private source repository, build and push the image from its root:
 
 ```sh
 docker buildx build --platform linux/amd64,linux/arm64 \
   --target runtime -f adapter/Dockerfile \
-  -t ghcr.io/cetp-flexbit/local-adapter:1.0.0 --push .
+  -t ghcr.io/cetp-flexbit/local-adapter:1.0.1 --push .
 ```
 
 To export a standalone bundle locally:
