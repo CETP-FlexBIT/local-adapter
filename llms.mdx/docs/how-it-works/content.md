@@ -26,6 +26,21 @@ Choose the asset type and set **Asset ID path** to the field containing the loca
 
 Enter a payload path for each measurement you want to send, then save. Mapping changes apply without restarting the adapter.
 
+To add a value automatically to every event, change the field's source from **Payload path** to **Fixed value**, then enter its value. For example, set `bess_storage_energy_nominal` to `100` when that capacity stays the same for every message.
+
+Fixed values accept plain text or JSON. Enter `100` for a number, `false` for a boolean, or `null` for null. Quote text such as `"100"` or `"false"` to keep it as a string. An empty fixed value adds an empty string. Payload paths and fixed values can be mixed in the same mapping.
+
+In YAML, a fixed field uses `constant` and `has_constant: true` instead of `source`:
+
+```yaml
+fields:
+  bess_storage_soc:
+    source: measurements.soc
+  bess_storage_energy_nominal:
+    constant: 100
+    has_constant: true
+```
+
 <img src="withSiteBasePath('/images/field-mapping.png')" alt="Edit mapping dialog with device.id as the asset ID path and measurements.soc mapped to bess_storage_soc" width="2962" height="1910" loading="lazy" />
 
 ## 3. Send telemetry [#3-send-telemetry]
@@ -71,6 +86,27 @@ If you enabled MQTT during Docker installation, the local connection and demo su
 ```sh
 ./scripts/test-telemetry.sh mqtt bess
 ```
+
+#### Assign a device by MQTT topic [#assign-a-device-by-mqtt-topic]
+
+When each device publishes to its own topic, the payload does not need a device ID:
+
+1. Under **Field mappings**, edit your mapping and set **Asset ID source** to **MQTT topic**. Save the mapping.
+2. Under **Device mappings**, select **Add device mapping**. Enter the full incoming topic, for example `devices/bess/telemetry`, in **Local device ID or MQTT topic**, then select the remote platform device.
+3. On **MQTT**, use that field mapping's ID in the subscription for the topic.
+
+Each exact topic can point to a different platform device while sharing the same field mapping. A wildcard subscription such as `devices/+/telemetry` still needs a device mapping for each full incoming topic; device mappings do not match `+` or `#` filters.
+
+The YAML equivalent sets `asset_id_source: mqtt_topic` in the field mapping, replacing `asset_id_path`. Topic assignments use the existing `device_ids` table in `config/device-mappings.yaml`:
+
+```yaml
+schema_version: 1
+device_ids:
+  devices/bess/telemetry: your-bess-flexbit-asset-id
+  devices/another-bess/telemetry: your-other-bess-flexbit-asset-id
+```
+
+Without an assignment, the topic itself becomes the asset ID. Topic-based field mappings require MQTT events. Keep **Asset ID source** set to **Asset ID path** for HTTP intake or MQTT payloads that identify the device in a field. Existing mappings continue to use their asset ID path.
 
 For commands to a device, add a **Command target** linking its FlexBIT asset ID to an MQTT connection and topic. Check outgoing attempts on **Commands**. The current adapter accepts commands through `/internal/commands`; it does not subscribe to platform commands automatically.
 

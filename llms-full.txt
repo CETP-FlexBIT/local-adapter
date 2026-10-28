@@ -26,6 +26,21 @@ Choose the asset type and set **Asset ID path** to the field containing the loca
 
 Enter a payload path for each measurement you want to send, then save. Mapping changes apply without restarting the adapter.
 
+To add a value automatically to every event, change the field's source from **Payload path** to **Fixed value**, then enter its value. For example, set `bess_storage_energy_nominal` to `100` when that capacity stays the same for every message.
+
+Fixed values accept plain text or JSON. Enter `100` for a number, `false` for a boolean, or `null` for null. Quote text such as `"100"` or `"false"` to keep it as a string. An empty fixed value adds an empty string. Payload paths and fixed values can be mixed in the same mapping.
+
+In YAML, a fixed field uses `constant` and `has_constant: true` instead of `source`:
+
+```yaml
+fields:
+  bess_storage_soc:
+    source: measurements.soc
+  bess_storage_energy_nominal:
+    constant: 100
+    has_constant: true
+```
+
 <img src="withSiteBasePath('/images/field-mapping.png')" alt="Edit mapping dialog with device.id as the asset ID path and measurements.soc mapped to bess_storage_soc" width="2962" height="1910" loading="lazy" />
 
 ## 3. Send telemetry [#3-send-telemetry]
@@ -71,6 +86,27 @@ If you enabled MQTT during Docker installation, the local connection and demo su
 ```sh
 ./scripts/test-telemetry.sh mqtt bess
 ```
+
+#### Assign a device by MQTT topic [#assign-a-device-by-mqtt-topic]
+
+When each device publishes to its own topic, the payload does not need a device ID:
+
+1. Under **Field mappings**, edit your mapping and set **Asset ID source** to **MQTT topic**. Save the mapping.
+2. Under **Device mappings**, select **Add device mapping**. Enter the full incoming topic, for example `devices/bess/telemetry`, in **Local device ID or MQTT topic**, then select the remote platform device.
+3. On **MQTT**, use that field mapping's ID in the subscription for the topic.
+
+Each exact topic can point to a different platform device while sharing the same field mapping. A wildcard subscription such as `devices/+/telemetry` still needs a device mapping for each full incoming topic; device mappings do not match `+` or `#` filters.
+
+The YAML equivalent sets `asset_id_source: mqtt_topic` in the field mapping, replacing `asset_id_path`. Topic assignments use the existing `device_ids` table in `config/device-mappings.yaml`:
+
+```yaml
+schema_version: 1
+device_ids:
+  devices/bess/telemetry: your-bess-flexbit-asset-id
+  devices/another-bess/telemetry: your-other-bess-flexbit-asset-id
+```
+
+Without an assignment, the topic itself becomes the asset ID. Topic-based field mappings require MQTT events. Keep **Asset ID source** set to **Asset ID path** for HTTP intake or MQTT payloads that identify the device in a field. Existing mappings continue to use their asset ID path.
 
 For commands to a device, add a **Command target** linking its FlexBIT asset ID to an MQTT connection and topic. Check outgoing attempts on **Commands**. The current adapter accepts commands through `/internal/commands`; it does not subscribe to platform commands automatically.
 
@@ -158,6 +194,39 @@ sudo journalctl -u flexbit-local-adapter.service -f
 ```
 
 Choose **no** at the service prompt to run in the terminal. Press Ctrl-C to stop; run `./start-adapter.sh` from the installation directory to start again. Standalone mode can connect to an external MQTT broker, but does not install the optional Docker services.
+
+## Manage the adapter from a terminal [#manage-the-adapter-from-a-terminal]
+
+Installation and update add the executable `flexbit-adapter` command. It is linked from `/usr/local/bin` by default, with sudo when needed. Choose a user-local directory with the installer's `--bin-dir "$HOME/.local/bin"` option and add that directory to `PATH`. Updates remember the chosen command directory.
+
+```sh
+flexbit-adapter help
+flexbit-adapter start
+flexbit-adapter stop
+flexbit-adapter restart
+flexbit-adapter status
+flexbit-adapter uninstall
+```
+
+You can run these from any directory. Systemd installations use the existing service. Docker actions affect only the adapter, leaving optional services running. Uninstall removes the service or adapter container and keeps configuration, data, and the management command.
+
+For a foreground installation, `flexbit-adapter start` runs in the terminal and stops with Ctrl-C. Install with `--with-service` for background start/stop control. `flexbit-adapter --help` also shows command help. The executable is included in new release ZIPs; updating older installations adds it too.
+
+## Update an existing installation [#update-an-existing-installation]
+
+Run this from the installation directory to update to the latest published release:
+
+```sh
+cd ~/flexbit-local-adapter
+curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh -o update-installer.sh
+sh ./update-installer.sh --update
+```
+
+Downloading the current installer first also supports older installations that have no update command. To select a release, add `--version X.Y.Z`. To update a different directory, add `--install-dir /path/to/installation`.
+
+The installer detects Docker or standalone mode and preserves your configuration, credentials, and data. It does not ask for credentials again. Docker updates change the adapter image in `.env` and recreate only the adapter; optional services keep running. Standalone updates verify the downloaded ZIP and bundled Node runtime before replacing application files. A systemd installation stops and restarts its existing service without changing the unit.
+
+For a foreground installation, stop the adapter with Ctrl-C before updating. The new version starts in the foreground when the update finishes. Add `--no-start` to leave a standalone installation stopped after the update. For Docker, `--no-start` saves the new image setting but leaves the running container unchanged; use the recap's start command to recreate it later.
 
 ## Open the dashboard [#open-the-dashboard]
 
