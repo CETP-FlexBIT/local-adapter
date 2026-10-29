@@ -2,7 +2,7 @@
 set -eu
 
 IMAGE="ghcr.io/cetp-flexbit/local-adapter"
-VERSION="1.0.1"
+VERSION="1.0.2"
 VERSION_SET=0
 UPDATE=0
 RELEASE_URL="https://github.com/CETP-FlexBIT/local-adapter/releases/download"

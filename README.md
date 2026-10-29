@@ -34,7 +34,7 @@ cd "$HOME/flexbit-local-adapter"
 ./start-adapter.sh
 ```
 
-You can also download `local-adapter-1.0.1-linux-arm64.zip` or `local-adapter-1.0.1-linux-amd64.zip` from [GitHub Releases](https://github.com/CETP-FlexBIT/local-adapter/releases/tag/v1.0.1), extract it, and run its `install.sh --without-docker`. Downloaded packages are verified against the release's `SHA256SUMS`. The ZIP includes `.output`, Node, default mappings, the installer, `start-adapter.sh`, `test-telemetry.sh`, and `flexbit-adapter`; no dependency installation or build is needed on the host.
+You can also download `local-adapter-1.0.2-linux-arm64.zip` or `local-adapter-1.0.2-linux-amd64.zip` from [GitHub Releases](https://github.com/CETP-FlexBIT/local-adapter/releases/tag/v1.0.2), extract it, and run its `install.sh --without-docker`. Downloaded packages are verified against the release's `SHA256SUMS`. The ZIP includes `.output`, Node, default mappings, the installer, `start-adapter.sh`, `test-telemetry.sh`, and `flexbit-adapter`; no dependency installation or build is needed on the host.
 
 Use `--with-docker` or `--without-docker` to select the mode without a prompt, and `--version X.Y.Z` to select a release when downloading. Without a terminal, Docker remains the default.
 
@@ -51,6 +51,8 @@ After installation, open `http://127.0.0.1:4000/settings` on the host to review 
 - API secret
 
 Settings saved in the UI are stored in SQLite and override corresponding `.env` values. The publisher is disabled until the agent endpoint, API ID, and API secret are set. A site ID is also required for a valid FlexBIT destination topic.
+
+Under **Local data**, the optional **Send interval in seconds** limits telemetry sending independently for each device ID. Leave it empty to send every record, which is the default. With an interval set, the first record is queued for delivery, records received within the interval are retained with a grey **Skipped** badge, and the next record received at or after the interval is queued. The interval uses arrival times and persists across restarts. All raw and mapped records remain subject to retention, and skipped records are never sent later. Changes apply to newly mapped records; already queued deliveries keep their retry behavior. To set a deployment default, use `FLEXBIT_SEND_INTERVAL_SECONDS`.
 
 The publisher client ID defaults to `flexbit-adapter`. Export `FLEXBIT_CLIENT_ID` before running the installer to override it.
 
@@ -168,14 +170,14 @@ Add `--no-start` to leave a standalone service stopped after replacing its files
 
 ## Build and publish releases
 
-The `Release adapter` GitHub Action runs manually from the private repository. Select **Run workflow** and enter a version such as `1.0.1` without the `v` prefix. All authored workflows run manually in the private repository. Public Pages serves the generated `gh-pages` branch; no workflow files are exported to the public repository. It tests both Linux ZIPs, pushes `ghcr.io/cetp-flexbit/local-adapter:X.Y.Z` for `linux/amd64` and `linux/arm64`, then attaches the ZIPs, `SHA256SUMS`, and versioned installer to the GitHub release. Builds and tests run in the private `nextmultiservice/local-adapter` repository. Documentation and installer changes are maintained there and exported to this public repository. Releases and the GHCR package remain public at the existing URLs. Maintainers configure cross-repository publishing credentials in the private repository; set the GHCR package visibility to public for unauthenticated installer pulls.
+The `Release adapter` GitHub Action runs manually from the private repository. Select **Run workflow** and enter a version such as `1.0.2` without the `v` prefix. All authored workflows run manually in the private repository. Public Pages serves the generated `gh-pages` branch; no workflow files are exported to the public repository. It tests both Linux ZIPs, pushes `ghcr.io/cetp-flexbit/local-adapter:X.Y.Z` for `linux/amd64` and `linux/arm64`, then attaches the ZIPs, `SHA256SUMS`, and versioned installer to the GitHub release. Builds and tests run in the private `nextmultiservice/local-adapter` repository. Documentation and installer changes are maintained there and exported to this public repository. Releases and the GHCR package remain public at the existing URLs. Maintainers configure cross-repository publishing credentials in the private repository; set the GHCR package visibility to public for unauthenticated installer pulls.
 
 With access to the private source repository, build and push the image from its root:
 
 ```sh
 docker buildx build --platform linux/amd64,linux/arm64 \
   --target runtime -f adapter/Dockerfile \
-  -t ghcr.io/cetp-flexbit/local-adapter:1.0.1 --push .
+  -t ghcr.io/cetp-flexbit/local-adapter:1.0.2 --push .
 ```
 
 To export a standalone bundle locally:

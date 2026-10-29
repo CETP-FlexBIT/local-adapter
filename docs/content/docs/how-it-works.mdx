@@ -120,5 +120,8 @@ Open **Events** and expand your event. The left side shows the incoming JSON; th
 - **Pending** means the event is waiting for mapping. Check its error, mapping ID, and payload paths if it stays pending.
 - **Mapped** means the payload is ready for delivery.
 - **Delivered** means the adapter sent it to FlexBIT.
+- **Skipped** means the record arrived within the configured send interval for its device. Its raw and mapped payloads are kept, but it will not be sent to FlexBIT.
+
+To reduce sending frequency, open **Settings**, enter the optional **Send interval in seconds** under **Local data**, and save. The same interval applies independently to each device ID. The first record is queued, records received within the interval are skipped, and the next record at or after the interval is queued. Leave the field empty to send every record. Changes apply to newly mapped records, and already queued deliveries continue normally. Use the **Skipped** filter on **Events** to find retained records that were not sent.
 
 If delivery does not complete, check the error shown on the event and verify your FlexBIT credentials and network connection.
