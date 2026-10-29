@@ -81,6 +81,7 @@ flexbit-adapter start
 flexbit-adapter stop
 flexbit-adapter restart
 flexbit-adapter status
+flexbit-adapter update
 flexbit-adapter uninstall
 ```
 
@@ -90,7 +91,9 @@ For a foreground installation, `flexbit-adapter start` runs in the terminal and 
 
 ## Update an existing installation
 
-Run this from the installation directory to update to the latest published release:
+Run `flexbit-adapter update` to download and install the latest published release while preserving configuration and data.
+
+For older installations without this command, run this from the installation directory:
 
 ```sh
 cd ~/flexbit-local-adapter

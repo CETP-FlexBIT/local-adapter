@@ -34,7 +34,7 @@ cd "$HOME/flexbit-local-adapter"
 ./start-adapter.sh
 ```
 
-You can also download `local-adapter-1.0.2-linux-arm64.zip` or `local-adapter-1.0.2-linux-amd64.zip` from [GitHub Releases](https://github.com/CETP-FlexBIT/local-adapter/releases/tag/v1.0.2), extract it, and run its `install.sh --without-docker`. Downloaded packages are verified against the release's `SHA256SUMS`. The ZIP includes `.output`, Node, default mappings, the installer, `start-adapter.sh`, `test-telemetry.sh`, and `flexbit-adapter`; no dependency installation or build is needed on the host.
+You can also download `local-adapter-1.0.3-linux-arm64.zip` or `local-adapter-1.0.3-linux-amd64.zip` from [GitHub Releases](https://github.com/CETP-FlexBIT/local-adapter/releases/tag/v1.0.3), extract it, and run its `install.sh --without-docker`. Downloaded packages are verified against the release's `SHA256SUMS`. The ZIP includes `.output`, Node, default mappings, the installer, `start-adapter.sh`, `test-telemetry.sh`, and `flexbit-adapter`; no dependency installation or build is needed on the host.
 
 Use `--with-docker` or `--without-docker` to select the mode without a prompt, and `--version X.Y.Z` to select a release when downloading. Without a terminal, Docker remains the default.
 
@@ -68,6 +68,7 @@ flexbit-adapter start
 flexbit-adapter stop
 flexbit-adapter restart
 flexbit-adapter status
+flexbit-adapter update
 flexbit-adapter uninstall
 ```
 
@@ -154,7 +155,9 @@ Standalone installations contain `.env`, `.output/`, `runtime/`, `config/`, `sta
 
 ## Update an existing installation
 
-From the installation directory, download the current installer and run its update mode. This also works when the installed version predates the updater:
+Run `flexbit-adapter update` to download and install the latest published version while preserving configuration and data.
+
+For older installations without this command, download the current installer and run its update mode:
 
 ```sh
 cd ~/flexbit-local-adapter
@@ -170,14 +173,14 @@ Add `--no-start` to leave a standalone service stopped after replacing its files
 
 ## Build and publish releases
 
-The `Release adapter` GitHub Action runs manually from the private repository. Select **Run workflow** and enter a version such as `1.0.2` without the `v` prefix. All authored workflows run manually in the private repository. Public Pages serves the generated `gh-pages` branch; no workflow files are exported to the public repository. It tests both Linux ZIPs, pushes `ghcr.io/cetp-flexbit/local-adapter:X.Y.Z` for `linux/amd64` and `linux/arm64`, then attaches the ZIPs, `SHA256SUMS`, and versioned installer to the GitHub release. Builds and tests run in the private `nextmultiservice/local-adapter` repository. Documentation and installer changes are maintained there and exported to this public repository. Releases and the GHCR package remain public at the existing URLs. Maintainers configure cross-repository publishing credentials in the private repository; set the GHCR package visibility to public for unauthenticated installer pulls.
+The `Release adapter` GitHub Action runs manually from the private repository. Select **Run workflow** and enter a version such as `1.0.3` without the `v` prefix. All authored workflows run manually in the private repository. Public Pages serves the generated `gh-pages` branch; no workflow files are exported to the public repository. It tests both Linux ZIPs, pushes `ghcr.io/cetp-flexbit/local-adapter:X.Y.Z` for `linux/amd64` and `linux/arm64`, then attaches the ZIPs, `SHA256SUMS`, and versioned installer to the GitHub release. Builds and tests run in the private `nextmultiservice/local-adapter` repository. Documentation and installer changes are maintained there and exported to this public repository. Releases and the GHCR package remain public at the existing URLs. Maintainers configure cross-repository publishing credentials in the private repository; set the GHCR package visibility to public for unauthenticated installer pulls.
 
 With access to the private source repository, build and push the image from its root:
 
 ```sh
 docker buildx build --platform linux/amd64,linux/arm64 \
   --target runtime -f adapter/Dockerfile \
-  -t ghcr.io/cetp-flexbit/local-adapter:1.0.2 --push .
+  -t ghcr.io/cetp-flexbit/local-adapter:1.0.3 --push .
 ```
 
 To export a standalone bundle locally:

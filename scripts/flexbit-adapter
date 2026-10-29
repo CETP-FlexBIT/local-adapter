@@ -10,6 +10,7 @@ Commands:
   stop        Stop the adapter service
   restart     Restart the adapter service
   status      Show the adapter service status
+  update      Download and install the latest adapter version
   uninstall   Stop and remove the service or adapter container
   help        Show this help (also --help or -h)
 
@@ -21,7 +22,7 @@ EOF
 
 case "${1:-help}" in
   help|-h|--help) usage; exit 0 ;;
-  start|stop|restart|status|uninstall) ACTION="$1" ;;
+  start|stop|restart|status|update|uninstall) ACTION="$1" ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;
 esac
 [ "$#" -eq 1 ] || { echo "Expected one command" >&2; usage >&2; exit 2; }
@@ -47,6 +48,15 @@ as_root() {
     sudo "$@"
   fi
 }
+
+if [ "$ACTION" = update ]; then
+  command -v curl >/dev/null || { echo "curl is required to download the updater" >&2; exit 1; }
+  TEMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
+  curl -fsSL https://raw.githubusercontent.com/CETP-FlexBIT/local-adapter/main/install.sh -o "$TEMP_DIR/install.sh"
+  sh "$TEMP_DIR/install.sh" --update --install-dir "$INSTALL_DIR"
+  exit 0
+fi
 
 if [ -f compose.yaml ]; then
   command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
